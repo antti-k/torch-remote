@@ -8,6 +8,8 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(device)
 
 # In[2]:
 
@@ -34,25 +36,6 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
 
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-
-# In[4]:
-
-
-import matplotlib.pyplot as plt
-import numpy as np
-
-# functions to show an image
-
-
-# get some random training images
-dataiter = iter(trainloader)
-images, labels = dataiter.next()
-
-# show images
-# print labels
-print(' '.join('%5s' % classes[labels[j]] for j in range(4)))
-
 
 # In[5]:
 
@@ -83,6 +66,7 @@ class Net(nn.Module):
 
 net = Net()
 
+net.to(device)
 
 # In[6]:
 
@@ -103,15 +87,16 @@ print(len(trainset))
 
 
 import time
-losses = []
-times = []
-for epoch in range(2):  # loop over the dataset multiple times
+
+def trainer(dataloader, net, optimizer, criterion, printing=False):
+    data_size = len(trainloader.__dict__['dataset'].__dict__['data'])
+    batch_size = trainloader.__dict__['batch_size']
     total_loss = 0.0
-    running_loss = 0.0
     t0 = time.time()
-    for i, data in enumerate(trainloader, 0):
+    for i, data in enumerate(dataloader, 0):
         # get the inputs; data is a list of [inputs, labels]
-        inputs, labels = data
+        #inputs, labels = data
+        inputs, labels = data[0].to(device), data[1].to(device)
 
         # zero the parameter gradients
         optimizer.zero_grad()
@@ -123,30 +108,34 @@ for epoch in range(2):  # loop over the dataset multiple times
         optimizer.step()
 
         # print statistics
-        running_loss += loss.item()
         total_loss += loss.item()
-        if i % 2000 == 1999:    # print every 2000 mini-batches
-            print('[%d, %5d] loss: %.3f' %
-                  (epoch + 1, i + 1, running_loss / 2000))
-            running_loss = 0.0
-            
-    t1 = time.time()
-    print('Time elapsed: {} s', t1-t0)
-    times.append(t1-t0)
-            
-    losses.append(total_loss * batch_size / len(trainset))
+        if printing:
+            elapsed_time = time.time() - t0
+            progress = (i + 1) * batch_size / data_size
+            time_left = elapsed_time / progress - elapsed_time
+            #print('\r{0:4d}'.format(i), end='')
+            print('\r{0:5d}/{1} Elapsed time: {2:.2f} s Estimated time left: {3:.2f} s     '.format(i * batch_size, data_size, elapsed_time, time_left), end='')
+            #print('\r{0:5d}/{0} Elapsed time: {0:.2f} s'.format(i * batch_size, end=''))
 
-print('Finished Training')
-print(losses)
-print(times)
+    # Print new line
+    print('\rTraining with {0} inputs done after {1:.2f} seconds.'.format(data_size, time.time() - t0))
+    print()
+    return total_loss
 
 
-# In[24]:
+# In[13]:
+
+
+for epoch in range(2):
+    trainer(trainloader, net, optimizer, criterion, True)
+
+# In[23]:
 
 
 #print(trainloader.__dict__)
 #print(len(trainloader.__dict__['dataset'].__dict__['data']))
 #batch_size also possible to get from DataLoader
+print(trainloader.__dict__['batch_size'])
 
 
 # In[9]:
@@ -180,7 +169,8 @@ class_correct = list(0. for i in range(10))
 class_total = list(0. for i in range(10))
 with torch.no_grad():
     for data in testloader:
-        images, labels = data
+        #images, labels = data
+        images, labels = data[0].to(device), data[1].to(device)
         outputs = net(images)
         _, predicted = torch.max(outputs, 1)
         c = (predicted == labels).squeeze()
